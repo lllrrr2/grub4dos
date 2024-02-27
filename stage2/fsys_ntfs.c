@@ -807,7 +807,7 @@ static int read_data(char* cur_mft,char* pa,unsigned long long dest,unsigned lon
 {
     unsigned long vcn, blk_size;
     unsigned char log2_blk_size;
-    read_ctx cc, *ctx;
+    read_ctx cc={0}, *ctx;
     int ret=0;
 
     if (len == 0)
@@ -837,8 +837,8 @@ static int read_data(char* cur_mft,char* pa,unsigned long long dest,unsigned lon
 	if (dest)
 		grub_memmove64 (dest, (unsigned long long)(unsigned int)(pa + valueat(pa,0x14,unsigned long) + ofs), len);
 	
-		disk_read_func = disk_read_hook;
-		devread(mft_start + valueat(cur_mft,0x2c,unsigned long) * mft_size, pa - cur_mft + valueat(pa,0x14,unsigned long), len, 0, GRUB_LISTBLK);
+	disk_read_func = disk_read_hook;
+	devread(mft_start + valueat(cur_mft,0x2c,unsigned long) * mft_size, pa - cur_mft + valueat(pa,0x14,unsigned long), len, 0, GRUB_LISTBLK);
 		disk_read_func = NULL;
 	return 1;
     }
@@ -1388,13 +1388,14 @@ int ntfs_mount (void)
 
   if (valueat(mmft,0x16,unsigned short) != 0)
     return 0;
-
+#if 0
+//使用'Macrorit Partition Expert'格式化，BPB的0x18、0x1A，0x1C为零！ 2024-02-19
   if ((unsigned short)(valueat(mmft,0x18,unsigned short) - 1) > 62)
     return 0;
 
   if ((unsigned short)(valueat(mmft,0x1A,unsigned short) - 1) > 255)
     return 0;
-
+#endif
   if (valueat(mmft,0x20,unsigned long) != 0)
     return 0;
 

@@ -250,7 +250,7 @@ rawdisk_read (unsigned long drive, unsigned long long sector, unsigned long nsec
     if (plast[0]!=BADDATA1 || plast[1]!=BADDATA1 || plast[2]!=BADDATA1 || plast[3]!=BADDATA1)
 	return 0; // not "BAD?", success
 
-	printf_warning("\nFatal! Inconsistent data read from (0x%X)%ld+%d\n",drive,sector,nsec);
+    printf_warning("\nFatal! Inconsistent data read from (0x%X)%ld+%d\n",drive,sector,nsec);
 	return -1; // error
 }
 
@@ -471,7 +471,7 @@ devread (unsigned long long sector, unsigned long long byte_offset, unsigned lon
 {
   unsigned long sector_size_bits = log2_tmp(buf_geom.sector_size);
   unsigned long rw_flag = write;
-
+#if 0   //太旧版本不再支持了  2023-05-24
   if (rw_flag != 0x900ddeed && rw_flag != 0xedde0d90 && rw_flag != GRUB_LISTBLK)
   {//for old devread with 32-bit byte_offset compatibility.
     rw_flag = *(unsigned long*)(&write - 1);
@@ -481,7 +481,7 @@ devread (unsigned long long sector, unsigned long long byte_offset, unsigned lon
     byte_len = *(unsigned long long*)(&write - 5);
     byte_offset = (unsigned long)byte_offset;
   }
-
+#endif
   if (emu_iso_sector_size_2048)
     {
       emu_iso_sector_size_2048 = 0;
@@ -781,8 +781,9 @@ redo:
 	P_GPT_ENT PI = (P_GPT_ENT)(unsigned int)next_partition_buf;
 	if (PI->starting_lba == 0LL /*|| PI->starting_lba > 0xFFFFFFFFL*/)
 	{
-		errnum = ERR_NO_PART;
-		return 0;
+//		errnum = ERR_NO_PART;
+//		return 0;
+    goto redo;  //避免分区项空洞  2023-06-20
 	}
 	//skip MS_Reserved Partition
 	if (memcmp(PI->type.raw,"\x16\xE3\xC9\xE3\x5C\x0B\xB8\x4D\x81\x7D\xF9\x2D\xF0\x02\x15\xAE",16) == 0 && next_partition_dest == 0xffffff)
@@ -844,7 +845,7 @@ redo:
       /* Read the MBR or the boot sector of the extended partition.  */
       if (! rawread (next_partition_drive, *next_partition_offset, 0, SECTOR_SIZE, (unsigned long long)(unsigned int)next_partition_buf, 0xedde0d90))
 	return 0;
-	if (pc_slice_no == -1 && next_partition_buf[0x1C2] == '\xEE' && is_gpt_part())
+      if (pc_slice_no == -1 && next_partition_buf[0x1C2] == '\xEE' && is_gpt_part())
 	{
 		if (next_partition_dest != 0xffffff)
 			pc_slice_no = (next_partition_dest>>16) - 1;
@@ -1342,7 +1343,7 @@ sane_partition (void)
   return 0;
 }
 
-
+static char cdrom_orig = 0;
 /* Parse a device string and initialize the global parameters. */
 char *
 set_device (char *device)
@@ -1374,7 +1375,7 @@ set_device (char *device)
 #ifdef FSYS_PXE
 	      || (*device == 'p' && pxe_entry)
 #endif /* FSYS_PXE */
-	      || (*device == 'c' && (cdrom_drive != GRUB_INVALID_DRIVE || atapi_dev_count)))
+	      || (*device == 'c' /*&& (cdrom_drive != GRUB_INVALID_DRIVE || atapi_dev_count)*/))  //清除无效参数带来的干扰   2023-11-10 
 	    {
 	      /* user has given '([fhn]', check for resp. add 'd' and
 		 let disk_choice handle what disks we have */
@@ -1403,7 +1404,7 @@ set_device (char *device)
 #ifdef FSYS_FB
               || (*device == 'u' && fb_status)
 #endif
-	      || (*device == 'c' && (cdrom_drive != GRUB_INVALID_DRIVE || atapi_dev_count)))
+	      || (*device == 'c' /*&& (cdrom_drive != GRUB_INVALID_DRIVE || atapi_dev_count)*/))  //清除无效参数带来的干扰   2023-11-10  
 	      && *(++device, device++) != 'd')
 	    errnum = ERR_NUMBER_PARSING;
 
@@ -1426,8 +1427,12 @@ set_device (char *device)
 	  else
 #endif /* FSYS_FB */
 	    {
-	      if (ch == 'c' && cdrom_drive != GRUB_INVALID_DRIVE && *device == ')')
-		current_drive = cdrom_drive;
+//	      if (ch == 'c' && cdrom_drive != GRUB_INVALID_DRIVE && *device == ')')
+//		current_drive = cdrom_drive;
+				if (ch == 'c' && *device == ')')	  //解析map /boot/imgd/zb40.iso (cd)"之类   2023-11-10
+				{
+          current_drive = (unsigned char)(0xa0 + cdrom_orig++);
+				}
 	      else if (ch == 'm')
 	      {
 		current_drive = 0xffff;
@@ -1478,9 +1483,35 @@ set_device (char *device)
 		  //  if (cdrom_drives[current_drive] != GRUB_INVALID_DRIVE)
 		  //	    current_drive = cdrom_drives[current_drive];
 		  //}
+#if 0
 		  else if (ch == 'c' && atapi_dev_count && current_drive < (unsigned long)atapi_dev_count)
 		  {
 		    current_drive += min_cdrom_id;
+		  }
+#endif
+		  else if (ch == 'c')
+		  {
+				if ((long long)ull < 0)	  //解析chainloader (cd-1)"之类   2023-11-10
+				{
+					if ((-ull) <= (unsigned long long)cdrom_orig)
+						current_drive = (unsigned char)(0xa0 + cdrom_orig + current_drive);
+					else
+						return (char *)!(errnum = ERR_DEV_FORMAT);
+				}
+				else                  	  //解析chainloader (cd0)"之类   2023-11-10
+          current_drive |= 0xa0;
+		  }
+      else if (ch == 'f')
+		  {
+				if ((long long)ull < 0)
+				{
+					if ((-ull) <= (unsigned long long)((*(char*)0x410 & 1)?(*(char*)0x410 >> 6) + 1 : 0))
+						current_drive = (unsigned char)(((*(char*)0x410 & 1)?(*(char*)0x410 >> 6) + 1 : 0) + current_drive);
+					else
+						return (char *)!(errnum = ERR_DEV_FORMAT);
+				}
+				else
+					current_drive |= 0;
 		  }
 		}
 	    }

@@ -119,38 +119,36 @@ VARIABLE(force_lba)
 	/* bit 2=0 enable single-key-selection feature. */
 	.byte	0x04
 
-VARIABLE(version_string)
-	.string VERSION
+VARIABLE(version_string)                                                  //0x8212
+	.string VERSION                                                         //0.97\0(hd0,0)
 
-VARIABLE(config_file)
+VARIABLE(config_file)                                                     //0x821e		配置文件  最长28字节(不考虑bootmgr，则最长72字节)
 	.string "/menu.lst"
-
-	. = EXT_C(main) + 0x34																									//0x8234    0x8238-0x8243  12字节未使用!!
-
+  
+	. = EXT_C(main) + 0x34
+//----------------------------------------------------------------------
+//以下bootmgr加载grldr、grldr.mbr需要
 	.word	0x14C	/* CPU type for i386 and compatibles */
 	.word	1	/* there is 1 section */
-VARIABLE(ext_timer)																												//0x8238  外部定时器  int*
-	.long 0
-VARIABLE(cursor_state)																										//0x823C	鼠标状态    int
-	.long 0																																	//  bit 0=1 show cursor,bit 1=1 show splashimage
-VARIABLE(grub_timeout)                                                    //0x8240  倒计时			int
-	.long	-1
 
-	. = EXT_C(main) + 0x44																									//0x8244	0x824e-0x8259  18字节未使用!!
+	. = EXT_C(main) + 0x44
 
 	.word	0x00	/* size of optional header */
 	.word	3	/* flags: "no relocation" and "valid executable" */
 	.word	0x722E	/* section name for resources */
 	.word	0x7273
 	.word	0x63
-
+//以上bootmgr加载grldr、grldr.mbr需要
+//----------------------------------------------------------------------
 	. = EXT_C(main) + 0x60
 
 VARIABLE(hotkey_func)  //int*                                             //0x8260	外置热键功能
   .long 0 
 
-	.long 0																																	//未使用
-	.long	0																																	//未使用
+VARIABLE(ext_timer)																												//0x8264  外部定时器  int*
+	.long 0
+VARIABLE(grub_timeout)                                                    //0x8268  倒计时			int
+	.long	-1
 	
 	/* Utilities may use this to locate the bss starting address,
 	 * where the "bootlace" signature is placed and preset-menu
@@ -379,6 +377,7 @@ VARIABLE(buf_track)
 VARIABLE(buf_drive)
 	.long	-1
 VARIABLE(current_x_resolution)	//0x834c  当前水平像素 int
+	.long	0
 
 	. = EXT_C(main) + 0x150
 	
@@ -388,10 +387,13 @@ VARIABLE(usb_drive_num)
 	.byte	0,0,0,0
 VARIABLE(usb_md_address)
 	.word	0
-VARIABLE(count_ms)
+  .byte	0                   //0x8357  未使用
+VARIABLE(count_ms)          //0x8358
 	.word	0
 VARIABLE(beep_frequency)
 	.word	0
+VARIABLE(cursor_state)		  //0x835C	鼠标状态    int
+	.long 0								    //  bit 0=1 show cursor,bit 1=1 show splashimage
 	
 	. = EXT_C(main) + 0x160	
 	
@@ -7973,6 +7975,7 @@ ENTRY(defer)
 	.code16
 
 	movw %bx, %ax
+	xorl %ecx, %ecx
 2:
 	movw %dx, %cx
 3:
@@ -7985,8 +7988,8 @@ ENTRY(defer)
 	inw %dx, %ax
 	popw %ax
 	popw %dx
-	decw %cx
-	cmpw $0, %cx
+	decl %ecx
+	cmpl $0, %ecx
 	jne 3b
 	decw %ax
 	jne 2b
@@ -15069,7 +15072,7 @@ ENTRY(console_getkey)
 	cmpl	$0xFFFFFFFF, %edx
 	jne	1f
   pushl $1
-  call defer;
+  call defer
   popl %eax
   cmpb $0, beep_enable
   je 2f

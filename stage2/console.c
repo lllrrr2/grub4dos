@@ -51,7 +51,8 @@ unsigned long long console_color_64bit[COLOR_STATE_MAX] = {
   /* represents the user defined colors for heading line */
   [COLOR_STATE_HEADING] = 0xAAAAAA,
   /* represents the user defined colors for notes */
-  [COLOR_STATE_BORDER] = 0x3399
+//  [COLOR_STATE_BORDER] = 0x3399
+  [COLOR_STATE_BORDER] = 0xAAAAAA
 
 };
 
@@ -155,8 +156,8 @@ console_setcolor(unsigned long state,unsigned long long color[])
 	{
 		if (!(state & (1<<i)))
 			continue;
-			console_color[i] = color_64_to_8(color[i]);
-			console_color_64bit[i] = color[i];
+		console_color[i] = color_64_to_8(color[i]);
+		console_color_64bit[i] = color[i];
 	}
 //	if (current_term == term_table)	/* console */
 //		toggle_blinking ();

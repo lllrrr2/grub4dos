@@ -978,10 +978,8 @@ restart1:
   if (! show_menu)
     {
       /* Get current time.  */
-//      while ((time1 = getrtsecs ()) == 0xFF)
-//	;
-		if (grub_timeout >= 0)
-			timeout_enable = 1;
+      while ((time1 = getrtsecs ()) == 0xFF)
+	;
 
       while (1)
 	{
@@ -1018,9 +1016,7 @@ restart1:
 
 	  /* If GRUB_TIMEOUT is expired, boot the default entry.  */
 	  if (grub_timeout >=0
-//	      && (time1 = getrtsecs ()) != time2
-				&& time1 != time2
-	      /* && time1 != 0xFF */)
+	      && (time1 = getrtsecs ()) != time2)
 	    {
 	      if (grub_timeout <= 0)
 		{
@@ -1187,8 +1183,9 @@ restart1:
    if (menu_init_script_file[0] != 0 )	
 	 command_func(menu_init_script_file,BUILTIN_MENU);
   /* XX using RT clock now, need to initialize value */
-//  while ((time1 = getrtsecs()) == 0xFF);
-	if (grub_timeout >= 0)
+  if (!ext_timer)
+    while ((time1 = getrtsecs()) == 0xFF);
+  else if (grub_timeout >= 0)
 		timeout_enable = 1;
 
   old_c = 0;
@@ -1202,9 +1199,9 @@ restart1:
       /* Initialize to NULL just in case...  */
       //cur_entry = NULL;
 	//cur_entry = menu_entries; /* for modified menu */
-
-//      if (grub_timeout >= 0 && (time1 = getrtsecs()) != time2 /* && time1 != 0xFF */)
-		if (grub_timeout >= 0 && time1 != time2 /* && time1 != 0xFF */)
+    if (grub_timeout >= 0 && 
+        ((!ext_timer && ((time1 = getrtsecs()) != time2)) ||
+        (ext_timer && time1 != time2)))
 	{
 	  if (grub_timeout <= 0)
 	    {
@@ -1260,15 +1257,15 @@ restart1:
 			else
 				current_color_64bit = timeout_color;
 		}
-		else
-				if (current_term->setcolorstate)
-					current_term->setcolorstate (COLOR_STATE_HIGHLIGHT);
+    else
+      if (current_term->setcolorstate)
+        current_term->setcolorstate (COLOR_STATE_HIGHLIGHT);
 
-				grub_printf("%2d",grub_timeout);
-				if (current_term->setcolorstate)
-	      current_term->setcolorstate (COLOR_STATE_HELPTEXT);
+    grub_printf("%2d",grub_timeout);
+    if (current_term->setcolorstate)
+      current_term->setcolorstate (COLOR_STATE_HELPTEXT);
 				
-	      gotoxy (MENU_BOX_E, MENU_BOX_Y + entryno);
+    gotoxy (MENU_BOX_E, MENU_BOX_Y + entryno);
 	    }
 	  
 	  grub_timeout--;
@@ -2623,7 +2620,7 @@ restart_config:
 	unsigned long graphicsmode_in_menu_init = 0;
 	unsigned long debug_in_menu_init = 0;
 	//char *cmdline;
-	int is_preset;
+	int is_preset, flags0;
 	grub_memset (graphic_file_shift, 0, 32);
 	menu_init_script_file[0] = 0;
 	{
@@ -2675,11 +2672,15 @@ restart_config:
 	{
 	    struct builtin *builtin = 0;
 	    char *cmdline = (char *) CMDLINE_BUF;
+	    flags0 = 0;
 	  
 	    /* Get the pointer to the builtin structure.  */
 			if (*cmdline == ':' || *cmdline == '!' || *cmdline == '{' || *cmdline == '}')
 			{
-        builtin->flags = 8;
+//        builtin->flags = 8;
+        if (builtin)          //适应gcc高版本  2023-05-24
+          builtin->flags = 8;
+        flags0 = 8;           //适应gcc高版本  2023-05-24
         goto sss;
       }
 	    builtin = find_command (cmdline);
@@ -2688,7 +2689,8 @@ restart_config:
 		/* Unknown command. Just skip now.  */
 		continue;
 sss:	  
-	    if ((int)builtin != -1 && builtin->flags == 0)	/* title command */
+//	    if ((int)builtin != -1 && builtin->flags == 0)	/* title command */
+    if ((int)builtin != (int)-1 && builtin && builtin->flags == 0 && flags0 != 8)	/* title command */  //适应gcc高版本  2023-05-24
 	    {
 		if (builtin != &builtin_title)/*If title*/
 		{
@@ -2770,7 +2772,7 @@ sss:
 		    /* The next title is found.  */
 		    if (num_entries >= 256)
 			break;
-			bt += (config_entries[attr] & 1);
+		    bt += (config_entries[attr] & 1);
 		    num_entries++;	/* an entry is completed. */
 		    config_entries[config_len++] = 0;	/* finish the entry. */
 		    prev_config_len = config_len;
@@ -2868,6 +2870,7 @@ extern int graphicsmode_func (char *, int);
 			menu = "(md)0x880+0x200";
 		if (font_func (menu, 0))
 		{
+      menu_tab_ext &= 0xfb;   //清除字库已加载标记
 		    /* font exists, automatically enter graphics mode. */
 		    if (! graphicsmode_in_menu_init)
 		    {
@@ -2895,7 +2898,8 @@ extern int graphicsmode_func (char *, int);
 	    //font_func (NULL, 0);	/* clear the font */
 	    /* Clear the narrow_char_indicator for the NULL char only. */
 //	    *(unsigned long *)UNIFONT_START = 0; // Enable next font command.
-	    font_func (config_file, 0);
+	    if (font_func (config_file, 0))
+        menu_tab_ext &= 0xfb;   //清除字库已加载标记
 	    //font_func (NULL, 0);	/* clear the font */
 	    /* Clear the narrow_char_indicator for the NULL char only. */
 //	    *(unsigned long *)UNIFONT_START = 0; // Enable next font command.
@@ -3099,8 +3103,8 @@ done_config_file:
 	pxe_restart_config = 1;	/* pxe_detect will use configfile to run menu */
 
     /* go ahead and make sure the terminal is setup */
-    if (current_term->startup)
-	(*current_term->startup)();
+//    if (current_term->startup)    无用  2023-06-13
+//	(*current_term->startup)();
 
     if (! num_entries)
     {

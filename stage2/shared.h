@@ -26,9 +26,10 @@
 #define GRUB_SHARED_HEADER	1
 
 #include <config.h>
+#if 1 //调试时设置为0,显示警告信息
 /* Disable all gcc warnings */
 
-#if defined (__GNUC__) && defined (__GNUC_MINOR__) && ((__GNUC__ >= 4) && (__GNUC_MINOR__  > 8)) || (__GNUC__ >= 4)
+#if defined (__GNUC__) && defined (__GNUC_MINOR__) && (((__GNUC__ == 4) && (__GNUC_MINOR__  > 8)) || (__GNUC__ >= 5))
 #pragma GCC diagnostic ignored "-Wunused-value"
 #endif
 
@@ -40,7 +41,7 @@
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
-
+#endif
 /* Add an underscore to a C symbol in assembler code if needed. */
 #ifdef HAVE_ASM_USCORE
 # define EXT_C(sym) _ ## sym
@@ -188,9 +189,11 @@
 #define DRIVE_MAP_SLOT_SIZE	24
 
 /* The fragment of the drive map.  */
-#define DRIVE_MAP_FRAGMENT		32
+//#define DRIVE_MAP_FRAGMENT		32
+#define DRIVE_MAP_FRAGMENT		0x7E
 
-#define FRAGMENT_MAP_SLOT_SIZE		0x280
+//#define FRAGMENT_MAP_SLOT_SIZE		0x280
+#define FRAGMENT_MAP_SLOT_SIZE		0x800
 
 /* The size of the key map.  */
 #define KEY_MAP_SIZE		128
@@ -1463,7 +1466,7 @@ extern unsigned long configfile_opened;
 /* misc */
 void init_page (void);
 void print_error (void);
-char *convert_to_ascii (char *buf, int c, ...);
+char *convert_to_ascii (char *buf, int c, int lo, int hi);
 extern char *prompt;
 extern int echo_char;
 extern int readline;
